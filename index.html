@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Chatbot with Debugger</title>
+  <style>
+    body { font-family: Arial, sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; background: #f4f4f9; }
+    #chat-container { width: 100%; max-width: 450px; background: #fff; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); display: flex; flex-direction: column; height: 60vh; }
+    #chat-box { flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+    .message { padding: 10px 14px; border-radius: 16px; max-width: 75%; word-wrap: break-word; }
+    .user { align-self: flex-end; background: #007bff; color: white; }
+    .bot { align-self: flex-start; background: #e9e9eb; color: black; }
+    #input-container { display: flex; border-top: 1px solid #ddd; padding: 10px; }
+    #user-input { flex: 1; border: 1px solid #ccc; padding: 10px; border-radius: 20px; outline: none; }
+    button { margin-left: 10px; padding: 10px 16px; border: none; background: #007bff; color: white; border-radius: 20px; cursor: pointer; }
+    button:hover { background: #0056b3; }
+    
+    /* On-screen Debugger Box */
+    #debug-container { width: 100%; max-width: 450px; margin-top: 15px; background: #222; color: #00ff00; padding: 10px; border-radius: 8px; font-family: monospace; font-size: 12px; height: 120px; overflow-y: auto; }
+    #debug-container h4 { margin: 0 0 5px 0; color: #fff; font-size: 13px; border-bottom: 1px solid #444; padding-bottom: 3px; }
+  </style>
+</head>
+<body>
+
+  <div id="chat-container">
+    <div id="chat-box"></div>
+    <div id="input-container">
+      <input type="text" id="user-input" placeholder="Type a message..." onkeypress="handleKeyPress(event)" />
+      <button onclick="sendMessage()">Send</button>
+    </div>
+  </div>
+
+  <!-- On-Screen Debugger Panel -->
+  <div id="debug-container">
+    <h4>Live Debugger Log:</h4>
+    <div id="log-content">Ready... Type a message above.</div>
+  </div>
+
+  <script>
+    const BACKEND_URL = 'https://girst-model-backend.onrender.com/api/chat';
+
+    function logDebug(message) {
+      const logContent = document.getElementById('log-content');
+      const timestamp = new Date().toLocaleTimeString();
+      logContent.innerHTML += `<div>[${timestamp}] ${message}</div>`;
+      const debugContainer = document.getElementById('debug-container');
+      debugContainer.scrollTop = debugContainer.scrollHeight;
+    }
+
+    async function sendMessage() {
+      const inputField = document.getElementById('user-input');
+      const text = inputField.value.trim();
+      if (!text) return;
+
+      appendMessage(text, 'user');
+      inputField.value = '';
+
+      const botMessageDiv = appendMessage('Typing...', 'bot');
+      logDebug(`Sending POST request to: ${BACKEND_URL}`);
+
+      try {
+        const response = await fetch(BACKEND_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ inputs: text })
+        });
+
+        logDebug(`Response received. Status: ${response.status} ${response.statusText}`);
+
+        if (!response.ok) {
+          const errText = await response.text();
+          logDebug(`Server Error Text: ${errText}`);
+          botMessageDiv.innerText = `Server error (Status ${response.status})`;
+          return;
+        }
+
+        const data = await response.json();
+        logDebug(`Response Data: ${JSON.stringify(data)}`);
+
+        if (data.error) {
+          botMessageDiv.innerText = `Error: ${data.error}`;
+        } else if (Array.isArray(data) && data[0]?.generated_text) {
+          botMessageDiv.innerText = data[0].generated_text;
+        } else if (data.generated_text) {
+          botMessageDiv.innerText = data.generated_text;
+        } else {
+          botMessageDiv.innerText = JSON.stringify(data);
+        }
+      } catch (err) {
+        logDebug(`Fetch Catch Error: ${err.message}`);
+        botMessageDiv.innerText = 'Failed to connect to the server.';
+      }
+    }
+
+    function handleKeyPress(event) {
+      if (event.key === 'Enter') {
+        sendMessage();
+      }
+    }
+
+    function appendMessage(text, sender) {
+      const chatBox = document.getElementById('chat-box');
+      const msgDiv = document.createElement('div');
+      msgDiv.classList.add('message', sender);
+      msgDiv.innerText = text;
+      chatBox.appendChild(msgDiv);
+      chatBox.scrollTop = chatBox.scrollHeight;
+      return msgDiv;
+    }
+  </script>
+</body>
+</html>
